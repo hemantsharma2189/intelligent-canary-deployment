@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: canary-app
+  labels:
+    app: canary-app
+spec:
+  replicas: 4
+  revisionHistoryLimit: 3
+
+  selector:
+    matchLabels:
+      app: canary-app
+
+  template:
+    metadata:
+      labels:
+        app: canary-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: canary-app
+          image: ghcr.io/hemantsharma2189/intelligent-canary-deployment:latest
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 8080
+
+          env:
+            - name: APP_VERSION
+              value: canary
+            - name: FAILURE_RATE
+              value: "0"
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+  strategy:
+    canary:
+      canaryService: canary-app-canary
+      stableService: canary-app-stable
+
+      trafficRouting:
+        nginx:
+          stableIngress: canary-app
+
+      steps:
+        - setWeight: 10
+        - pause:
+            duration: 60
+
+        - setWeight: 25
+        - analysis:
+            templates:
+              - templateName: canary-success-rate
+
+        - setWeight: 50
+        - pause:
+            duration: 120
+
+        - analysis:
+            templates:
+              - templateName: canary-success-rate
+
+        - setWeight: 75
+        - pause:
+            duration: 120
+
+        - setWeight: 100
