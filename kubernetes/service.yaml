@@ -1,9 +1,28 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: canary-app
+  name: canary-app-stable
   labels:
     app: canary-app
+    role: stable
+spec:
+  selector:
+    app: canary-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-app-canary
+  labels:
+    app: canary-app
+    role: canary
 spec:
   selector:
     app: canary-app
