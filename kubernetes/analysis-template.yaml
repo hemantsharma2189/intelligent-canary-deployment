@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: canary-success-rate
+spec:
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 5
+      successCondition: result[0] >= 95
+      failureCondition: result[0] < 95
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            (
+              sum(
+                rate(
+                  canary_http_requests_total{
+                    version="canary",
+                    status=~"2.."
+                  }[1m]
+                )
+              )
+              /
+              sum(
+                rate(
+                  canary_http_requests_total{
+                    version="canary"
+                  }[1m]
+                )
+              )
+            ) * 100
+
+    - name: p95-latency
+      interval: 30s
+      count: 5
+      successCondition: result[0] < 0.5
+      failureCondition: result[0] >= 0.5
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(
+              0.95,
+              sum(
+                rate(
+                  canary_http_request_duration_seconds_bucket{
+                    version="canary"
+                  }[1m]
+                )
+              ) by (le)
+            )
